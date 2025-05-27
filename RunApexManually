@@ -1,0 +1,2 @@
+AuditTrailSyncJob job = new AuditTrailSyncJob();
+job.execute(null);
