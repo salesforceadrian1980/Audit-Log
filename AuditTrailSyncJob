@@ -1,0 +1,50 @@
+global class AuditTrailSyncJob implements Schedulable {
+
+    global void execute(SchedulableContext sc) {
+        // Get the most recent audit log entry stored
+        Audit_Log__c lastStoredLog;
+        try {
+            lastStoredLog = [SELECT Created_Date__c FROM Audit_Log__c ORDER BY Created_Date__c DESC LIMIT 1];
+        } catch (Exception e) {
+            lastStoredLog = null; // No previous logs exist
+        }
+
+        // Query new SetupAuditTrail records since the last stored log
+        List<SetupAuditTrail> newAuditLogs = new List<SetupAuditTrail>();
+
+        if (lastStoredLog != null) {
+            newAuditLogs = [
+                SELECT Action, Section, CreatedById, CreatedDate, Display 
+                FROM SetupAuditTrail 
+                WHERE CreatedDate > :lastStoredLog.Created_Date__c 
+                ORDER BY CreatedDate ASC
+            ];
+        } else {
+            // If no logs exist, get recent audit logs (optional: limit to avoid large queries)
+            newAuditLogs = [
+                SELECT Action, Section, CreatedById, CreatedDate, Display 
+                FROM SetupAuditTrail 
+                ORDER BY CreatedDate ASC 
+                LIMIT 50
+            ];
+        }
+
+        // Convert SetupAuditTrail records into Audit_Log__c records
+        List<Audit_Log__c> auditLogRecords = new List<Audit_Log__c>();
+        for (SetupAuditTrail log : newAuditLogs) {
+            Audit_Log__c newLog = new Audit_Log__c(
+                Action__c = log.Action,
+                Section__c = log.Section,
+                Created_By__c = log.CreatedById,
+                Created_Date__c = log.CreatedDate,
+                Description__c = log.Display
+            );
+            auditLogRecords.add(newLog);
+        }
+
+        // Insert records into the custom object
+        if (!auditLogRecords.isEmpty()) {
+            insert auditLogRecords;
+        }
+    }
+}
